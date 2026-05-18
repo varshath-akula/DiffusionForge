@@ -2,6 +2,7 @@ import torch
 import numpy as np
 from tqdm import tqdm
 from ddpm import DDPMSampler
+from tokenizer import Tokenizer
 
 WIDTH = 512
 HEIGHT = 512
@@ -21,8 +22,9 @@ def generate(
     seed=None,
     device=None,
     idle_device=None,
-    tokenizer=None,
 ):
+    if device is None:
+        device = 'cpu'
     with torch.no_grad():
         if not 0 < strength <= 1:
             raise ValueError("strength must be between 0 and 1")
@@ -39,35 +41,30 @@ def generate(
         else:
             generator.manual_seed(seed)
 
+        tokenizer = Tokenizer()
         clip = models["clip"]
         clip.to(device)
         
         if do_cfg:
             # Convert into a list of length Seq_Len=77
-            cond_tokens = tokenizer.batch_encode_plus(
-                [prompt], padding="max_length", max_length=77
-            ).input_ids
-            # (Batch_Size, Seq_Len)
-            cond_tokens = torch.tensor(cond_tokens, dtype=torch.long, device=device)
+            cond_tokens = tokenizer.encode_batch([prompt])
+            # (Batch_Size, Seq_Len) -> (Batch_Size, Seq_Len)
+            cond_tokens = torch.tensor(cond_tokens,dtype = torch.long,device = device)
             # (Batch_Size, Seq_Len) -> (Batch_Size, Seq_Len, Dim)
             cond_context = clip(cond_tokens)
             # Convert into a list of length Seq_Len=77
-            uncond_tokens = tokenizer.batch_encode_plus(
-                [uncond_prompt], padding="max_length", max_length=77
-            ).input_ids
-            # (Batch_Size, Seq_Len)
-            uncond_tokens = torch.tensor(uncond_tokens, dtype=torch.long, device=device)
+            uncond_tokens = tokenizer.encode_batch([uncond_prompt])
+            # (Batch_Size, Seq_Len) -> (Batch_Size, Seq_Len)
+            uncond_tokens = torch.tensor(uncond_tokens,dtype = torch.long,device = device)
             # (Batch_Size, Seq_Len) -> (Batch_Size, Seq_Len, Dim)
             uncond_context = clip(uncond_tokens)
             # (Batch_Size, Seq_Len, Dim) + (Batch_Size, Seq_Len, Dim) -> (2 * Batch_Size, Seq_Len, Dim)
             context = torch.cat([cond_context, uncond_context])
         else:
             # Convert into a list of length Seq_Len=77
-            tokens = tokenizer.batch_encode_plus(
-                [prompt], padding="max_length", max_length=77
-            ).input_ids
-            # (Batch_Size, Seq_Len)
-            tokens = torch.tensor(tokens, dtype=torch.long, device=device)
+            tokens = tokenizer.encode_batch([prompt])
+            # (Batch_Size, Seq_Len) -> (Batch_Size, Seq_Len)
+            tokens = torch.tensor(tokens,dtype = torch.long,device = device)
             # (Batch_Size, Seq_Len) -> (Batch_Size, Seq_Len, Dim)
             context = clip(tokens)
         to_idle(clip)
